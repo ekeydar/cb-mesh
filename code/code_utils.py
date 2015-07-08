@@ -1,3 +1,5 @@
+import warnings
+warnings.filterwarnings('error',category=DeprecationWarning)
 from couchbase.bucket import Bucket
 from couchbase.exceptions import HTTPError
 import json
@@ -7,21 +9,21 @@ import time
 bucket = Bucket("couchbase://localhost/demo")
 
 def create_ddoc():
-
+    bm = bucket.bucket_manager()
     try:
-        bucket.design_get('demo',use_devmode=False)
-        bucket.design_delete('demo',use_devmode=False)
+        bm.design_get('demo',use_devmode=False)
+        bm.design_delete('demo',use_devmode=False)
     except HTTPError:
         pass
 
-    bucket.design_create('demo',
-                         {u'views': 
-                          {u'all_keys': 
-                           {u'map': u'function (doc, meta) {\n  emit(meta.id, null);\n}'}
-                       }
-                      },
-                         use_devmode=False)
-    print json.dumps(bucket.design_get('demo',use_devmode=False).value,indent=4)
+    bm.design_create('demo',
+                     {u'views': 
+                      {u'all_keys': 
+                       {u'map': u'function (doc, meta) {\n  emit(meta.id, null);\n}'}
+                   }
+                  },
+                     use_devmode=False)
+    print json.dumps(bm.design_get('demo',use_devmode=False).value,indent=4)
 
 def clean_all_docs():
     all_keys = [r.key for r in bucket.query('demo','all_keys')]
