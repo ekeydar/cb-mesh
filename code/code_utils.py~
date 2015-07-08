@@ -1,0 +1,2 @@
+from couchbase.bucket import Bucket
+bucket = Bucket("couchbase://localhost/demo")
