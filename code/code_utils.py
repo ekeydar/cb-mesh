@@ -6,6 +6,7 @@ import json
 import random
 import datetime
 import time
+
 bucket = Bucket("couchbase://localhost/demo")
 
 def create_ddoc():
@@ -26,10 +27,13 @@ def create_ddoc():
     print json.dumps(bm.design_get('demo',use_devmode=False).value,indent=4)
 
 def clean_all_docs():
-    all_keys = [r.key for r in bucket.query('demo','all_keys')]
-    print 'Found %s keys' % len(all_keys)
-    if all_keys:
-        bucket.delete_multi(all_keys,quiet=True)
+    for x in xrange(3):
+        all_keys = [r.key for r in bucket.query('demo','all_keys')]
+        if all_keys:
+            bucket.remove_multi(all_keys,quiet=True)
+    print 'cleaned'
+        
+        
                 
 
 def get_random_date(days=365):
@@ -48,21 +52,56 @@ def add_user(name,phone,join_date,verbose=True):
     existing_user = get_user_by_phone(phone)
     if existing_user:
         print 'User %s exists' % name
-        return
-    user = dict()
-    user_id = bucket.incr("user_counter",initial=1).value
-    user['name'] = name
-    user['phone'] = phone
-    user['join'] = join_date.isoformat()
-    user['id'] = user_id
-    user['doctype'] = "user"
-    user['docversion'] = 1
+        return existing_user
+    user_id = bucket.counter("user_counter",initial=1,delta=1).value
+    user = {
+        'name': name,
+        'phone': phone,
+        'join': join_date.isoformat(),
+        'id': user_id,
+        'doctype': 'user',
+    }        
     key = 'user:%d' % user_id
     bucket.insert(key, user)
     bucket.insert('user_by_phone:%s' % user['phone'],user_id)
     if verbose:
         print 'Added user with key: %s' % key
+    return user
 
+def print_user(user_id):
+    user = bucket.get('user:%d' % user_id).value
+    print '-' * 50
+    print 'user %s: %s' % (user['id'],user['name'])
+    print 'phone: %s' % user['phone']
+    print 'join: %s' % user['join']
+    print '-' * 50
+
+def create_chat(name,user_id):
+    chat_id = bucket.counter('chat_counter',initial=1,delta=1).value
+    chat = {
+        'name' : name,
+        'members': [user_id],
+        'id' : chat_id
+    }
+    bucket.insert('chat:%s' % chat_id,chat)
+    return chat
+
+def join_user_to_chat(chat_id,user_id):
+    chat = bucket.get('chat:%d' % chat_id).value
+    chat['members'].append(user_id)
+    bucket.replace('chat:%d' % chat_id,chat)
+    
+def print_chat(chat_id):
+    chat = bucket.get('chat:%d' % chat_id).value
+    print '-' * 50
+    print 'Chat %d: %s' % (chat['id'],chat['name'])
+    print '%s members:' % len(chat['members'])
+    keys = ['user:%d' % uid for uid in chat['members']]
+    users = [r.value for r in bucket.get_multi(keys).values()]
+    for user in users:
+        print '\t%s' % user['name']
+    print '--------------------------------------------'
+    
 def add_many_users(count=10000):
     for x in xrange(1,1+count):
         add_user(name='user%s' % x,
@@ -71,6 +110,21 @@ def add_many_users(count=10000):
                  verbose=False)
     print 'Added %s users' % count
 
+
+def test1():
+    clean_all_docs()
+    eran = add_user('Eran Keydar','+12345',get_random_date())
+    ido = add_user('Ido Keydar','+12346',get_random_date())
+    yuval = add_user('Yuval Keydar','+12347',get_random_date())
+    rotem = add_user('Rotem Keydar','+12348',get_random_date())
+    print_user(eran['id'])
+    chat = create_chat('the keydars',eran['id'])
+    join_user_to_chat(chat['id'],ido['id'])
+    join_user_to_chat(chat['id'],yuval['id'])
+    join_user_to_chat(chat['id'],rotem['id'])
+    print_chat(chat['id'])
+    
+        
 
 if __name__ == '__main__':
     create_ddoc()
