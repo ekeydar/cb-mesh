@@ -193,12 +193,22 @@ def test4_views():
 	print 'By year'
 	for row in rows:
 		print row.key,row.value
-	print 'By month'
+	print 'Month with maximal users'
 	rows = bucket.query('users','users_by_date',use_devmode=False,
 		reduce=True,group_level=2)
+	max_row = max(rows,key=lambda r : r.value)
+	print max_row
+	print 'All users joined in specific month'
+	rows = bucket.query('users','users_by_date',
+						 use_devmode=False,
+						 reduce=False,
+						 startkey=[2013,7,0],
+						 endkey=[2013,7,35],
+						 include_docs=True	
+						 )
 	for row in rows:
-		print row.key, row.value
-
+		u = row.doc.value
+		print '%s joined in %s' % (u['name'],u['join']);
 
 if __name__ == '__main__':
     create_ddoc()
