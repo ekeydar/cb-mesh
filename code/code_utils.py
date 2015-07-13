@@ -37,16 +37,16 @@ def clean_all_docs():
         
                 
 
-def get_random_date(days=365):
+def get_random_date(days=365*3):
     """ returns random date in the last X days """
     to_time = int(time.time())
-    from_time = int(time.time())
+    from_time = int(time.time()-days*60*60*24)
     return datetime.date.fromtimestamp(random.randint(from_time,to_time))
   
 def get_user_by_phone(phone):
     user_id = bucket.get('user_by_phone:%s' % phone, quiet=True).value
     if user_id:
-        return get_user(user_id)
+        return bucket.get('user:%s' % user_id).value
     return None
 
 def add_user(name,phone,join_date,verbose=True):
@@ -128,14 +128,6 @@ def print_chat(chat_id):
         print '\t%s' % user['name']
     print '--------------------------------------------'
     
-def add_many_users(count=10000):
-    for x in xrange(1,1+count):
-        add_user(name='user%s' % x,
-                 phone='+97256%05d' % random.randint(1,99999),
-                 join_date=get_random_date(),
-                 verbose=False)
-    print 'Added %s users' % count
-
 
 def test1():
     clean_all_docs()
@@ -187,6 +179,25 @@ def test3():
         t.join()
     print_chat(chat_id)
     
+def test4():
+	clean_all_docs()
+	for x in xrange(10000):
+		add_user('user %s' % x,'+123%05d' % x,get_random_date(),verbose=False)
+	print bucket.get('user_counter').value
+	# create the view
+	
+def test4_views():
+	# by year
+	rows = bucket.query('users','users_by_date',use_devmode=False,
+		reduce=True,group_level=1)
+	print 'By year'
+	for row in rows:
+		print row.key,row.value
+	print 'By month'
+	rows = bucket.query('users','users_by_date',use_devmode=False,
+		reduce=True,group_level=2)
+	for row in rows:
+		print row.key, row.value
 
 
 if __name__ == '__main__':
