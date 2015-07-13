@@ -1,13 +1,14 @@
 import warnings
 warnings.filterwarnings('error',category=DeprecationWarning)
-from couchbase.bucket import Bucket
-from couchbase.exceptions import HTTPError
+from couchbase.bucket import Bucket,LOCKMODE_WAIT
+from couchbase.exceptions import HTTPError,KeyExistsError
 import json
 import random
 import datetime
 import time
 
-bucket = Bucket("couchbase://localhost/demo")
+bucket = Bucket("couchbase://localhost/demo",
+                lockmode=LOCKMODE_WAIT)
 
 def create_ddoc():
     bm = bucket.bucket_manager()
@@ -89,7 +90,32 @@ def create_chat(name,user_id):
 def join_user_to_chat(chat_id,user_id):
     chat = bucket.get('chat:%d' % chat_id).value
     chat['members'].append(user_id)
+    print len(chat['members'])
     bucket.replace('chat:%d' % chat_id,chat)
+
+
+def retry_cas(func):
+    def _wrap(*args,**kwargs):
+        for x in xrange(10):
+            try:
+                res = func(*args,**kwargs)
+                return res
+            except KeyExistsError:
+                if x == 9:
+                    raise 
+                time.sleep(0.01)                
+    return _wrap
+
+@retry_cas
+def join_user_to_chat_with_cas(chat_id,user_id):
+    result = bucket.get('chat:%d' % chat_id)
+    chat = result.value
+    cas = result.cas
+    chat['members'].append(user_id)
+    print len(chat['members'])
+    bucket.replace('chat:%d' % chat_id,chat,cas=cas)
+
+
     
 def print_chat(chat_id):
     chat = bucket.get('chat:%d' % chat_id).value
@@ -123,8 +149,45 @@ def test1():
     join_user_to_chat(chat['id'],yuval['id'])
     join_user_to_chat(chat['id'],rotem['id'])
     print_chat(chat['id'])
+
+def test2():
+    import threading
+    clean_all_docs()
+    users = []
+    eran = add_user('Eran Keydar','+12345',get_random_date())
+    chat = create_chat('the keydars',eran['id'])
+    chat_id = chat['id']
+    for x in xrange(1,30):
+        users.append(add_user('User %s' % x,'+123%05d' % x,get_random_date()))
+    threads = []
+    for user in users:
+        t = threading.Thread(target=join_user_to_chat,args=(chat_id,user['id']))
+        t.start()
+        threads.append(t)
+    for t in threads:
+        t.join()
+    print_chat(chat_id)
     
-        
+
+def test3():
+    import threading
+    clean_all_docs()
+    users = []
+    eran = add_user('Eran Keydar','+12345',get_random_date())
+    chat = create_chat('the keydars',eran['id'])
+    chat_id = chat['id']
+    for x in xrange(1,30):
+        users.append(add_user('User %s' % x,'+123%05d' % x,get_random_date()))
+    threads = []
+    for user in users:
+        t = threading.Thread(target=join_user_to_chat_with_cas,args=(chat_id,user['id']))
+        t.start()
+        threads.append(t)
+    for t in threads:
+        t.join()
+    print_chat(chat_id)
+    
+
 
 if __name__ == '__main__':
     create_ddoc()
