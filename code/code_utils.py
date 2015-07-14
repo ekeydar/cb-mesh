@@ -29,13 +29,20 @@ def create_ddoc():
 
 def clean_all_docs():
     for x in xrange(3):
-        all_keys = [r.key for r in bucket.query('demo','all_keys')]
-        if all_keys:
-            bucket.remove_multi(all_keys,quiet=True)
+        clean_all_docs_once()
     print 'cleaned'
+
+def clean_all_docs_once():
+    skip = 0
+    limit = 1000
+    while True:
+        keys = [r.key for r in bucket.query('demo','all_keys',skip=skip,limit=limit)]
+        if keys:
+            bucket.remove_multi(keys,quiet=True)
+            skip+=limit
+        else:
+            return
         
-        
-                
 
 def get_random_date(days=365*3):
     """ returns random date in the last X days """
@@ -43,6 +50,13 @@ def get_random_date(days=365*3):
     from_time = int(time.time()-days*60*60*24)
     return datetime.date.fromtimestamp(random.randint(from_time,to_time))
   
+def get_random_country():
+    countries = ['US','IL','GB','UA','CA','IT']
+    return random.choice(countries)
+
+def get_random_phone():
+    return '+%08d' % (random.randint(0,99999999))
+
 def get_user_by_phone(phone):
     user_id = bucket.get('user_by_phone:%s' % phone, quiet=True).value
     if user_id:
@@ -180,35 +194,35 @@ def test3():
     print_chat(chat_id)
     
 def test4():
-	clean_all_docs()
-	for x in xrange(10000):
-		add_user('user %s' % x,'+123%05d' % x,get_random_date(),verbose=False)
-	print bucket.get('user_counter').value
-	# create the view
-	
+    clean_all_docs()
+    for x in xrange(10000):
+        add_user('user %s' % x,'+123%05d' % x,get_random_date(),verbose=False)
+    print bucket.get('user_counter').value
+    # create the view
+    
 def test4_views():
-	# by year
-	rows = bucket.query('users','users_by_date',use_devmode=False,
-		reduce=True,group_level=1)
-	print 'By year'
-	for row in rows:
-		print row.key,row.value
-	print 'Month with maximal users'
-	rows = bucket.query('users','users_by_date',use_devmode=False,
-		reduce=True,group_level=2)
-	max_row = max(rows,key=lambda r : r.value)
-	print max_row
-	print 'All users joined in specific month'
-	rows = bucket.query('users','users_by_date',
-						 use_devmode=False,
-						 reduce=False,
-						 startkey=[2013,7,0],
-						 endkey=[2013,7,35],
-						 include_docs=True	
-						 )
-	for row in rows:
-		u = row.doc.value
-		print '%s joined in %s' % (u['name'],u['join']);
+    # by year
+    rows = bucket.query('users','users_by_date',use_devmode=False,
+        reduce=True,group_level=1)
+    print 'By year'
+    for row in rows:
+        print row.key,row.value
+    print 'Month with maximal users'
+    rows = bucket.query('users','users_by_date',use_devmode=False,
+        reduce=True,group_level=2)
+    max_row = max(rows,key=lambda r : r.value)
+    print max_row
+    print 'All users joined in specific month'
+    rows = bucket.query('users','users_by_date',
+                         use_devmode=False,
+                         reduce=False,
+                         startkey=[2013,7,0],
+                         endkey=[2013,7,35],
+                         include_docs=True  
+                         )
+    for row in rows:
+        u = row.doc.value
+        print '%s joined in %s' % (u['name'],u['join']);
 
 if __name__ == '__main__':
     create_ddoc()
